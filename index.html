@@ -46,6 +46,15 @@
         let isFlipping = false;
         let flipDirection = 0; 
         let emmiter, particles; 
+        
+        let sky = null;
+        let property= { x:0, y:64, type: "platform"};
+        let doubleJump = false;
+
+        let edgeTimer = 0;
+        let jumpTimer = 0;
+        let heightText; 
+        let wasStanding = false;
 
         function preload() {
             // 練習先前學過的經驗，將background.png、platform.png、ice-platform.png、dude.png資料匯入
@@ -63,15 +72,72 @@
         }
 
         function create() {
+
+            this.physics.world.setBounds(0,0,640,2000);
+
             // 繪製背景天空
-            this.add.sprite(0, 0, "background").setOrigin(0);
+            sky = this.add.tileSprite(
+                config.width / 2,
+                config.height / 2,
+                config.width,
+                config.height,
+                "clouds"
+            );
+            this.add.sprite(0, 1920, "trees").setOrigin(0);
+
+            sky.setScrollFactor(0);
+
+
+            heightText = this.add.text(10, 10, "高度: 1952", {
+                fontSize: "20px",
+                fill: "#fff",
+            });
+            heightText.setScrollFactor(0); // 讓文字不會跟著相機移動
+        
+        
+
             // 建立會動的dude
             player = this.physics.add
-                .sprite(320, 240, "dude")
+                .sprite(320, 1952, "dude")
                 .setCollideWorldBounds(true)
                 .setName("dude")
                 .setBounce(0.2);
+                player.body.setSize(2, 32).setOffset(10, 16);
 
+            //建立群組
+            platforms = this.physics.add.group({
+                immovable: true, 
+                allowGravity: false,
+                velocityX: 100,
+            });
+
+            this.physics.add.collider(player, platforms, setFriction, null, this);
+            //this.physics.add.collider(player, platforms)
+
+            let camera = this.cameras.main;
+            camera
+                  .setBounds(0,0,640,2000)
+                  .startFollow(player,true,0,0.05,0,100)
+
+
+            for (let i= 0; i< 19; i++) {
+                property.type= i% 2 === 1 ? "platform" : "ice-platform";
+                let platform = platforms
+                    .create(property.x, property.y, property.type)
+                    .setVelocityX(100)
+                    .setOrigin(0, 0)
+                    .setName("platform" + i);
+                
+                if (property.type === "platform") platform.body.setFriction(1);
+                property.x += 200;                
+                if(property.x>= 600) {
+                   property.x= 0;
+                }
+                property.y+= 104;
+                if (Math.random() > 0.5){
+                    platform.body.velocityX *=-1;
+                }
+            }
 
             // 建立dude動畫
             this.anims.create({
@@ -114,14 +180,35 @@
 
         }
 
-        function update() {
+        function update(time,delta) {
+
+            heightText.setText("高度: " + Math.floor(2000 - player.y));
+
+            let standing = player.body.blocked.down || player.body.touching.down;
+
+            if (!standing && wasStanding) {
+                edgeTimer = time + 250;
+            }
+            if(
+                (standing || time <= edgeTimer) &&
+                cursors.up.isDown &&
+                time > jumpTimer
+            ){
+                player.body.velocity.y = -500;
+                jumpTimer = time + 750;
+            }
+            wasStanding = standing;
+
+
+
+
             player.setVelocityX(0);
             let isTouch = player.body.blocked.down || player.body.touching.down;
             if (cursors.left.isDown) {
-                player.setVelocityX(-200);
+                player.setVelocityX(-300);
                 player.anims.play("left", true);
             } else if (cursors.right.isDown) {
-                player.setVelocityX(200);
+                player.setVelocityX(300);
                 player.anims.play("right", true);
             } else {
                 player.setVelocityX(0);
@@ -133,7 +220,7 @@
             }
 
             // 增加判斷是否翻轉中
-            if (cursors.up.isDown && isTouch && !isFlipping) {
+            if (cursors.up.isDown && isTouch && !isFlipping ) {
                 isFlipping = true;
                 player.setVelocityY(-500);
                 // 使用粒子特效
@@ -151,7 +238,43 @@
                 }
             });
         }
+
+        platforms.getChildren().forEach(function(platform) {
+        wrapPlatform(platform);
+        });
+
+        if (player.x <= 0) {
+        player.x = config.width - 2; // 從右邊出來
+    } else if (player.x >= config.width) {
+        player.x = 2; // 從左邊出來
     }
+
+    }
+
+
+
+
+
+
+        function wrapPlatform(platform) {
+                    if(platform.body.velocity.x < 0 && platform.x<= -160) {
+                    platform.x= 640;
+                    }
+                    // 平台速度大於0且平台位置超過畫布寬度時重置
+                    else if (platform.body.velocity.x> 0&& platform.x>= 640) {
+                    platform.x= -160;
+                    }
+                }
+
+        function setFriction(player, platform) {
+                    if (platform.texture.key === "ice-platform") {
+                        player.body.x-= platform.body.x- platform.body.prev.x;
+                    }
+                }
+
+             
+
+
     </script>
 </body>
 
