@@ -46,6 +46,7 @@
         let isFlipping = false;
         let flipDirection = 0; 
         let emmiter, particles; 
+        let canDoubleJump = true;
         
         let sky = null;
         let property= { x:0, y:64, type: "platform"};
@@ -55,6 +56,9 @@
         let jumpTimer = 0;
         let heightText; 
         let wasStanding = false;
+        let totalHeight = 2000; // 遊戲總高度
+        let progressText;
+        
 
         function preload() {
             // 練習先前學過的經驗，將background.png、platform.png、ice-platform.png、dude.png資料匯入
@@ -93,6 +97,11 @@
                 fill: "#fff",
             });
             heightText.setScrollFactor(0); // 讓文字不會跟著相機移動
+            progressText = this.add.text(10, 40, "進度: 0%", {
+                fontSize: "20px",
+                fill: "#fff",
+            });
+            progressText.setScrollFactor(0); // 讓文字不會跟著相機移動
         
         
 
@@ -120,7 +129,7 @@
                   .startFollow(player,true,0,0.05,0,100)
 
 
-            for (let i= 0; i< 30; i++) {
+            for (let i= 0; i< 51; i++) {
                 property.type= i% 2 === 1 ? "platform" : "ice-platform";
                 let platform = platforms
                     .create(property.x, property.y, property.type)
@@ -182,6 +191,11 @@
 
         function update(time,delta) {
 
+            let progress = ((totalHeight - player.y) / totalHeight) * 100;
+                progress = Math.min(100, Math.max(0, progress)); // 限制在 0% ~ 100%
+
+                progressText.setText("進度: " + progress.toFixed(1) + "%"); // 顯示進度
+
             heightText.setText("高度: " + Math.floor(2000 - player.y));
 
             let standing = player.body.blocked.down || player.body.touching.down;
@@ -203,26 +217,39 @@
 
 
             player.setVelocityX(0);
-            let isTouch = player.body.blocked.down || player.body.touching.down;
-            if (cursors.left.isDown) {
-                player.setVelocityX(-300);
-                player.anims.play("left", true);
-            } else if (cursors.right.isDown) {
-                player.setVelocityX(300);
-                player.anims.play("right", true);
-            } else {
-                player.setVelocityX(0);
-                player.anims.play("turn");
-                flipDirection = 0;
+        let isTouch = player.body.blocked.down || player.body.touching.down;
+
+        // 角色左右移動
+        if (cursors.left.isDown) {
+            player.setVelocityX(-300);
+            player.anims.play("left", true);
+        } else if (cursors.right.isDown) {
+            player.setVelocityX(300);
+            player.anims.play("right", true);
+        } else {
+            player.setVelocityX(0);
+            player.anims.play("turn");
+        }
+
+        // **落地時重置二段跳**
+        if (isTouch) {
+            canDoubleJump = true; // 角色落地後，恢復二段跳機會
+        }
+
+        // **跳躍邏輯**
+        if (Phaser.Input.Keyboard.JustDown(cursors.up)) { 
+            if (isTouch) {
+                player.setVelocityY(-500); // **正常跳躍**
+            } else if (canDoubleJump) {
+                player.setVelocityY(-500); // **空中二段跳**
+                canDoubleJump = false; // **消耗二段跳機會**
             }
-            if (cursors.up.isDown && isTouch) {
-                player.setVelocityY(-500);
-            }
+        }
+
 
             // 增加判斷是否翻轉中
             if (cursors.up.isDown && isTouch && !isFlipping ) {
                 isFlipping = true;
-                player.setVelocityY(-500);
                 // 使用粒子特效
                 emitter.start();
             // 使用tweens補間動畫設計翻轉效果
@@ -243,11 +270,6 @@
         wrapPlatform(platform);
         });
 
-        if (player.x <= 0) {
-        player.x = config.width - 2; // 從右邊出來
-    } else if (player.x >= config.width) {
-        player.x = 2; // 從左邊出來
-    }
 
     }
 
